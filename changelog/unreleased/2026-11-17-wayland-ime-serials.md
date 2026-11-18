@@ -1,0 +1,1 @@
+- Linux input methods no longer lose preedit or committed text when unrelated frames resend an unchanged IME cursor rectangle. Focus, composition resets, DPI changes and real cursor changes still refresh the input context.
