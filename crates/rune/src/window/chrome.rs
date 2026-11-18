@@ -138,5 +138,5 @@ pub(super) fn has_window_menu(window: &Window) -> bool {
 pub(super) fn request_inner_size(window: &Window, size: (f32, f32)) {
     #[cfg(target_os = "windows")]
     if crate::platform::win32::request_inner_size(window, size) { return; }
-    let _ = window.request_inner_size(LogicalSize::new(size.0, size.1));
+    let _ = window.request_inner_size(winit::dpi::LogicalSize::new(size.0, size.1));
 }
