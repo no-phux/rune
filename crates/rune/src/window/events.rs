@@ -374,6 +374,8 @@ impl<S: 'static> Host<S> {
                 }
             }
             WindowEvent::Focused(focused) => {
+                #[cfg(target_os = "linux")]
+                l.native.ime_cursor.reset();
                 rt.set_system_reduced_motion(crate::platform::preferences::reduced_motion());
             rt.set_system_contrast(crate::platform::preferences::contrast());
                 rt.set_system_increased_contrast(crate::platform::preferences::increased_contrast());
@@ -397,12 +399,7 @@ impl<S: 'static> Host<S> {
                         l.window.set_ime_allowed(ime_allowed);
                         self.ime_allowed = ime_allowed;
                     }
-                    if let Some(a) = rt.ime_area.map(|a| rt.to_window(a)) {
-                        l.window.set_ime_cursor_area(
-                            LogicalPosition::new(a[0] as f64, a[1] as f64),
-                            LogicalSize::new(a[2] as f64, a[3] as f64),
-                        );
-                    }
+                    l.sync_ime_cursor(rt.ime_area.map(|a| rt.to_window(a)));
                     l.apply_cursor(rt, true);
                 }
                 if rt.stale() { l.request_redraw(); }
@@ -442,8 +439,16 @@ impl<S: 'static> Host<S> {
                         rt.ime(Ime::Preedit(s, cur, clauses))
                     }
                     WIme::Commit(s) => rt.ime(Ime::Commit(s)),
-                    WIme::Enabled => rt.ime(Ime::Enabled),
-                    WIme::Disabled => rt.ime(Ime::Disabled),
+                    WIme::Enabled => {
+                        #[cfg(target_os = "linux")]
+                        l.native.ime_cursor.reset();
+                        rt.ime(Ime::Enabled)
+                    }
+                    WIme::Disabled => {
+                        #[cfg(target_os = "linux")]
+                        l.native.ime_cursor.reset();
+                        rt.ime(Ime::Disabled)
+                    }
                 }
                 l.request_redraw();
             }

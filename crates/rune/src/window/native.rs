@@ -1,5 +1,5 @@
 //! What a window holds per OS: on macOS its display link, present hook, panel and native
-//! views; on Linux desktops its activation helper; on Windows its first-frame cloak; elsewhere
+//! views; on Linux desktops its activation helper and IME cursor; on Windows its first-frame cloak; elsewhere
 //! nothing.
 
 #[cfg(target_os = "macos")]
@@ -67,6 +67,8 @@ mod tests;
 #[derive(Default)]
 pub(super) struct Native {
     pub(super) activator: Option<crate::platform::activation::Activator>,
+    #[cfg(target_os = "linux")]
+    pub(super) ime_cursor: super::platform_sync::ImeCursor,
 }
 
 #[cfg(target_os = "windows")]
