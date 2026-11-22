@@ -1,0 +1,1 @@
+- Linux Wayland: unchanged caret rectangles no longer commit a new input-method transaction on unrelated frames. Cursor movement, resizing, display scaling and input-context changes still refresh the candidate window.
