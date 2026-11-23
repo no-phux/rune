@@ -44,6 +44,8 @@ use crate::platform_impl::wayland::seat::{
 };
 use crate::platform_impl::wayland::state::{WindowCompositorUpdate, WinitState};
 
+use super::ime_cursor::ImeCursor;
+
 #[cfg(feature = "sctk-adwaita")]
 pub type WinitFrame = sctk_adwaita::AdwaitaFrame<WinitState>;
 #[cfg(not(feature = "sctk-adwaita"))]
@@ -114,6 +116,9 @@ pub struct WindowState {
 
     /// The text inputs observed on the window.
     text_inputs: Vec<ZwpTextInputV3>,
+
+    /// The cursor rectangle last published to the current input contexts.
+    ime_cursor: ImeCursor,
 
     /// The inner size of the window, as in without client side decorations.
     size: LogicalSize<u32>,
@@ -199,6 +204,7 @@ impl WindowState {
             seat_focus: Default::default(),
             has_pending_move: None,
             ime_allowed: false,
+            ime_cursor: ImeCursor::default(),
             ime_purpose: ImePurpose::Normal,
             last_configure: None,
             max_inner_size: None,
@@ -1056,17 +1062,20 @@ impl WindowState {
     /// Add seat focus for the window.
     #[inline]
     pub fn add_seat_focus(&mut self, seat: ObjectId) {
+        self.ime_cursor.reset();
         self.seat_focus.insert(seat);
     }
 
     /// Remove seat focus from the window.
     #[inline]
     pub fn remove_seat_focus(&mut self, seat: &ObjectId) {
+        self.ime_cursor.reset();
         self.seat_focus.remove(seat);
     }
 
     /// Returns `true` if the requested state was applied.
     pub fn set_ime_allowed(&mut self, allowed: bool) -> bool {
+        self.ime_cursor.reset();
         self.ime_allowed = allowed;
 
         let mut applied = false;
@@ -1085,20 +1094,31 @@ impl WindowState {
     }
 
     /// Set the IME position.
-    pub fn set_ime_cursor_area(&self, position: LogicalPosition<u32>, size: LogicalSize<u32>) {
+    pub fn set_ime_cursor_area(&mut self, position: LogicalPosition<u32>, size: LogicalSize<u32>) {
+        if self.text_inputs.is_empty() {
+            return;
+        }
         // FIXME: This won't fly unless user will have a way to request IME window per seat, since
         // the ime windows will be overlapping, but winit doesn't expose API to specify for
         // which seat we're setting IME position.
         let (x, y) = (position.x as i32, position.y as i32);
         let (width, height) = (size.width as i32, size.height as i32);
+        let rectangle = [x, y, width, height];
+        // Every commit advances the text-input transaction, even for an unchanged
+        // rectangle. Unrelated frames must not keep publishing the same state.
+        if self.ime_cursor.unchanged(rectangle, self.scale_factor) {
+            return;
+        }
         for text_input in self.text_inputs.iter() {
             text_input.set_cursor_rectangle(x, y, width, height);
             text_input.commit();
         }
+        self.ime_cursor.remember(rectangle, self.scale_factor);
     }
 
     /// Set the IME purpose.
     pub fn set_ime_purpose(&mut self, purpose: ImePurpose) {
+        self.ime_cursor.reset();
         self.ime_purpose = purpose;
 
         for text_input in &self.text_inputs {
@@ -1177,6 +1197,7 @@ impl WindowState {
     /// Register text input on the top-level.
     #[inline]
     pub fn text_input_entered(&mut self, text_input: &ZwpTextInputV3) {
+        self.ime_cursor.reset();
         if !self.text_inputs.iter().any(|t| t == text_input) {
             self.text_inputs.push(text_input.clone());
         }
@@ -1185,6 +1206,7 @@ impl WindowState {
     /// The text input left the top-level.
     #[inline]
     pub fn text_input_left(&mut self, text_input: &ZwpTextInputV3) {
+        self.ime_cursor.reset();
         if let Some(position) = self.text_inputs.iter().position(|t| t == text_input) {
             self.text_inputs.remove(position);
         }
